@@ -1,9 +1,18 @@
+# Dependency updates, kept deliberately quiet: one grouped pull request per ecosystem, at most
+# two open at a time, once a week. Each pull request runs the full CI, so unbounded PRs would
+# queue dozens of runs and starve the real work on a repository's free runner allowance.
 version: 2
 updates:
   - package-ecosystem: cargo
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: '04:00'
+    open-pull-requests-limit: 2
+    groups:
+      rust-minor-and-patch:
+        update-types: [minor, patch]
     # llama-cpp-2 is pinned exactly: bump it deliberately, with a benchmark and a test run.
     ignore:
       - dependency-name: llama-cpp-2
@@ -12,7 +21,19 @@ updates:
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: '04:00'
+    open-pull-requests-limit: 2
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: '04:00'
+    open-pull-requests-limit: 1
+    groups:
+      github-actions:
+        patterns: ['*']
