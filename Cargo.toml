@@ -1,0 +1,29 @@
+[package]
+name = "n-infer"
+version = "0.1.0"
+edition = "2021"
+authors = ["Robert Serrano"]
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "2", default-features = false, features = ["napi6", "async"] }
+napi-derive = "2"
+llama-cpp-2 = "=0.1.160"
+encoding_rs = "0.8"
+
+[build-dependencies]
+napi-build = "2"
+
+[features]
+default = []
+# Opt-in GPU backends. scripts/build.js enables `cuda` automatically when nvcc is found.
+cuda = ["llama-cpp-2/cuda"]
+vulkan = ["llama-cpp-2/vulkan"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"
