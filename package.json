@@ -1,11 +1,31 @@
 {
   "name": "n-infer",
-  "version": "0.1.0",
-  "description": "Native in-process GGUF inference for Node.js (Rust + llama.cpp via napi-rs)",
+  "version": "0.1.0-beta.0",
+  "description": "Run GGUF language models inside Node.js: in-process llama.cpp via Rust, tuned for low latency. No server, no Python.",
+  "keywords": [
+    "llm",
+    "llama",
+    "llama.cpp",
+    "gguf",
+    "inference",
+    "local-ai",
+    "cuda",
+    "metal",
+    "napi",
+    "rust",
+    "chat"
+  ],
   "author": "Robert Serrano",
   "license": "MIT",
+  "homepage": "https://github.com/RhinoRobert/n-infer#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RhinoRobert/n-infer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RhinoRobert/n-infer/issues"
+  },
   "type": "module",
-  "sideEffects": false,
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "exports": {
@@ -15,20 +35,30 @@
     }
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.19"
   },
   "files": [
-    "lib/index.js",
-    "lib/local-model.js",
-    "lib/stream.js",
-    "lib/native.js",
-    "lib/index.d.ts",
-    "scripts/build.js",
-    "src",
-    "Cargo.toml",
-    "Cargo.lock",
-    "build.rs"
+    "lib/*.js",
+    "lib/index.d.ts"
   ],
+  "optionalDependencies": {
+    "@n-infer/darwin-arm64": "0.1.0-beta.0",
+    "@n-infer/linux-arm64-gnu": "0.1.0-beta.0",
+    "@n-infer/linux-x64-gnu": "0.1.0-beta.0",
+    "@n-infer/win32-x64-msvc": "0.1.0-beta.0"
+  },
+  "peerDependencies": {
+    "@n-infer/linux-x64-gnu-cuda": "0.1.0-beta.0",
+    "@n-infer/win32-x64-msvc-cuda": "0.1.0-beta.0"
+  },
+  "peerDependenciesMeta": {
+    "@n-infer/linux-x64-gnu-cuda": {
+      "optional": true
+    },
+    "@n-infer/win32-x64-msvc-cuda": {
+      "optional": true
+    }
+  },
   "napi": {
     "name": "n-infer"
   },
@@ -39,9 +69,24 @@
     "build:portable": "node scripts/build.js --portable",
     "build:baseline": "node scripts/build.js --baseline",
     "build:debug": "node scripts/build.js --debug",
+    "test": "node scripts/test.js",
+    "test:unit": "node scripts/test.js unit",
+    "test:integration": "node scripts/test.js integration",
+    "test:rust": "cargo test",
+    "test:types": "tsc --project test/types/tsconfig.json",
+    "test:fetch": "node scripts/fetch-test-model.js",
+    "lint": "npm run lint:rust && npm run format:check && npm run test:types",
+    "lint:rust": "cargo fmt --check && cargo clippy --all-targets -- -D warnings",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "stage": "node scripts/stage-npm.js",
+    "pack:check": "node scripts/check-pack.js",
     "example": "node examples/basic.js"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^2.18.4"
+    "@napi-rs/cli": "^2.18.4",
+    "@types/node": "^20.14.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0"
   }
 }

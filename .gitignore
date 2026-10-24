@@ -1,6 +1,10 @@
 ﻿node_modules/
 target/
+dist/
 *.node
 napi-generated.d.ts
 models/
 *.gguf
+test/fixtures/*.partial
+bench/node_modules/
+bench/package-lock.json

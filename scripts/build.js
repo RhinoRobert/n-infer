@@ -51,7 +51,11 @@ const feature = flags.has('--cuda')
       ? 'cuda'
       : null;
 
-const tuning = flags.has('--portable') ? 'portable' : flags.has('--baseline') ? 'baseline' : 'native';
+const tuning = flags.has('--portable')
+  ? 'portable'
+  : flags.has('--baseline')
+    ? 'baseline'
+    : 'native';
 
 // llama.cpp's build reads `target-cpu` from RUSTFLAGS: `native` also selects this machine's CUDA
 // architecture; anything else gets a portable multi-architecture CUDA build.
@@ -59,6 +63,9 @@ const cpuFlag = { native: 'native', portable: 'x86-64-v3', baseline: null }[tuni
 const useCpuFlag = cpuFlag && !(tuning === 'portable' && process.arch !== 'x64');
 const env = { ...process.env };
 if (useCpuFlag) env.RUSTFLAGS = `${env.RUSTFLAGS ?? ''} -C target-cpu=${cpuFlag}`.trim();
+
+// MSBuild (used by CMake on Windows) otherwise leaves idle worker processes running after a build.
+env.MSBUILDDISABLENODEREUSE = '1';
 
 // Visual Studio's CUDA integration looks the toolkit up through CUDA_PATH_V<major>_<minor>. The
 // CUDA installer sets it for new shells, but an older shell only has CUDA_PATH.
