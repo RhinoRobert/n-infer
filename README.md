@@ -22,16 +22,18 @@ for await (const piece of ai.stream('Write a haiku about Rust:')) process.stdout
 ## Install
 
 ```bash
-npm install n-infer
+npm install n-infer@beta
 ```
+
+While n-infer is in beta, `@beta` selects the latest beta release.
 
 npm picks the right prebuilt binary for your machine: Windows x64, Linux x64 / arm64 (glibc), or macOS arm64 (Metal, built in). Node.js 20.19 or newer.
 
 **NVIDIA GPU (Windows or Linux x64)** is an opt-in add-on, so CPU users do not download it:
 
 ```bash
-npm install @n-infer/win32-x64-msvc-cuda      # Windows
-npm install @n-infer/linux-x64-gnu-cuda       # Linux
+npm install @n-infer/win32-x64-msvc-cuda@beta      # Windows
+npm install @n-infer/linux-x64-gnu-cuda@beta       # Linux (experimental in the first beta)
 ```
 
 It needs a recent NVIDIA driver and the CUDA 12 runtime libraries (`cudart`, `cublas`) on `PATH` / `LD_LIBRARY_PATH`; installing the CUDA Toolkit provides them. If the add-on cannot load, n-infer falls back to the CPU build and prints a warning. Check what you got:

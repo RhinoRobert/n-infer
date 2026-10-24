@@ -15,6 +15,11 @@ on:
 permissions:
   contents: read
 
+# Never run two releases at once: a half-finished publish cannot be undone.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -47,8 +52,10 @@ jobs:
     name: build ${{ matrix.target }}
     needs: verify
     runs-on: ${{ matrix.os }}
+    # Experimental targets may fail without blocking the release; their package is just not published.
+    continue-on-error: ${{ matrix.experimental == true }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - { target: win32-x64-msvc, os: windows-latest, flags: '--cpu --portable' }
@@ -59,7 +66,14 @@ jobs:
               cuda: true,
             }
           - { target: linux-x64-gnu, os: ubuntu-22.04, flags: '--cpu --portable' }
-          - { target: linux-x64-gnu-cuda, os: ubuntu-22.04, flags: '--cuda --portable', cuda: true }
+          # Not yet built anywhere: the static cuBLAS binary may be very large (see docs/PACKAGING.md).
+          - {
+              target: linux-x64-gnu-cuda,
+              os: ubuntu-22.04,
+              flags: '--cuda --portable',
+              cuda: true,
+              experimental: true,
+            }
           - { target: linux-arm64-gnu, os: ubuntu-22.04-arm, flags: '--cpu --portable' }
           - { target: darwin-arm64, os: macos-latest, flags: '--portable' }
     steps:
@@ -83,7 +97,7 @@ jobs:
         with:
           cuda: '12.8.0'
           method: network
-          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "visual_studio_integration"]'
+          sub-packages: ${{ runner.os == 'Windows' && '["nvcc", "cudart", "cublas", "cublas_dev", "visual_studio_integration"]' || '["nvcc", "cudart", "cublas", "cublas_dev"]' }}
       - run: npm ci
       - run: npm run build -- ${{ matrix.flags }}
       - name: Load the binary (CPU builds can run on the runner)
@@ -122,6 +136,14 @@ jobs:
           for dir in artifacts/bin-*; do mv "$dir" "artifacts/${dir#artifacts/bin-}"; done
           find artifacts -type f
       - run: node scripts/stage-npm.js artifacts
+      - name: Name release assets by platform (they would all be called n-infer.node)
+        run: |
+          mkdir release-assets
+          for dir in artifacts/*/; do
+            target=$(basename "$dir")
+            cp "$dir/n-infer.node" "release-assets/n-infer-$target.node"
+          done
+          ls -l release-assets
       - name: Check every package's contents
         run: for dir in dist/npm/*/; do node scripts/check-pack.js "$dir"; done && node scripts/check-pack.js
       - name: Publish platform packages, then the main package
@@ -145,4 +167,4 @@ jobs:
         with:
           generate_release_notes: true
           prerelease: ${{ contains(needs.verify.outputs.version, '-') }}
-          files: artifacts/**/n-infer.node
+          files: release-assets/*.node
