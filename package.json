@@ -5,6 +5,7 @@
   "author": "Robert Serrano",
   "license": "MIT",
   "type": "module",
+  "sideEffects": false,
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "exports": {
@@ -17,7 +18,16 @@
     "node": ">=18"
   },
   "files": [
-    "lib"
+    "lib/index.js",
+    "lib/local-model.js",
+    "lib/stream.js",
+    "lib/native.js",
+    "lib/index.d.ts",
+    "scripts/build.js",
+    "src",
+    "Cargo.toml",
+    "Cargo.lock",
+    "build.rs"
   ],
   "napi": {
     "name": "n-infer"
@@ -26,6 +36,8 @@
     "build": "node scripts/build.js",
     "build:cpu": "node scripts/build.js --cpu",
     "build:cuda": "node scripts/build.js --cuda",
+    "build:portable": "node scripts/build.js --portable",
+    "build:baseline": "node scripts/build.js --baseline",
     "build:debug": "node scripts/build.js --debug",
     "example": "node examples/basic.js"
   },
