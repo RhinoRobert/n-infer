@@ -11,6 +11,8 @@ export interface GenerateOptions {
   /** 0 or less selects greedy decoding. */
   temperature?: number;
   topP?: number;
+  /** Penalty on recently seen tokens; 1 disables it. Default 1.1. */
+  repetitionPenalty?: number;
   seed?: number;
 }
 

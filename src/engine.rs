@@ -20,6 +20,9 @@ const DEFAULT_CONTEXT: u32 = 4096;
 const DEFAULT_MAX_TOKENS: u32 = 256;
 /// Prompt tokens decoded per batch; longer prompts are fed in chunks.
 const PROMPT_BATCH: usize = 512;
+/// How many recent tokens the repetition penalty looks back over.
+const REPEAT_WINDOW: i32 = 64;
+const DEFAULT_REPEAT_PENALTY: f64 = 1.1;
 
 pub struct Engine {
     model: LlamaModel,
@@ -61,7 +64,7 @@ impl Engine {
 
         let mut batch = LlamaBatch::new(PROMPT_BATCH, 1);
         let mut pos = feed_prompt(&mut ctx, &mut batch, &tokens)?;
-        let mut sampler = build_sampler(options);
+        let mut sampler = build_sampler(options, self.model.n_vocab());
         let mut utf8 = encoding_rs::UTF_8.new_decoder();
         let mut logits_idx = batch.n_tokens() - 1;
 
@@ -138,20 +141,26 @@ fn feed_prompt(ctx: &mut LlamaContext, batch: &mut LlamaBatch, tokens: &[LlamaTo
     Ok(pos)
 }
 
-fn build_sampler(options: &GenerateOptions) -> LlamaSampler {
+fn build_sampler(options: &GenerateOptions, n_vocab: i32) -> LlamaSampler {
     let temperature = options.temperature.unwrap_or(0.8) as f32;
-    if temperature <= 0.0 {
-        return LlamaSampler::greedy();
+    let repeat_penalty = options.repetition_penalty.unwrap_or(DEFAULT_REPEAT_PENALTY) as f32;
+
+    let mut chain = Vec::new();
+    if repeat_penalty != 1.0 {
+        chain.push(LlamaSampler::penalties(n_vocab, REPEAT_WINDOW, repeat_penalty, 0.0, 0.0));
     }
-    let seed = options.seed.unwrap_or_else(|| {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.subsec_nanos())
-            .unwrap_or(1234)
-    });
-    LlamaSampler::chain_simple([
-        LlamaSampler::top_p(options.top_p.unwrap_or(0.95) as f32, 1),
-        LlamaSampler::temp(temperature),
-        LlamaSampler::dist(seed),
-    ])
+    if temperature <= 0.0 {
+        chain.push(LlamaSampler::greedy());
+    } else {
+        let seed = options.seed.unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.subsec_nanos())
+                .unwrap_or(1234)
+        });
+        chain.push(LlamaSampler::top_p(options.top_p.unwrap_or(0.95) as f32, 1));
+        chain.push(LlamaSampler::temp(temperature));
+        chain.push(LlamaSampler::dist(seed));
+    }
+    LlamaSampler::chain_simple(chain)
 }

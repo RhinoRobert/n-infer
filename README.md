@@ -56,7 +56,7 @@ The build writes `lib/n-infer.node`. To use it from another local project: `npm 
 
 - `new LocalModel({ modelPath, gpuLayers = 0, contextSize = 4096, threads, verbose = false })`
 - `await ai.init()`
-- `await ai.generate(prompt, { maxTokens = 256, temperature = 0.8, topP = 0.95, seed })` (`temperature: 0` is greedy)
+- `await ai.generate(prompt, { maxTokens = 256, temperature = 0.8, topP = 0.95, repetitionPenalty = 1.1, seed })` (`temperature: 0` is greedy, `repetitionPenalty: 1` is off)
 - `ai.stream(prompt, options)`: async iterator of text chunks
 - `ai.close()`; the `backend` export is `'cuda' | 'vulkan' | 'cpu'`
 
