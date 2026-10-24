@@ -8,7 +8,8 @@ use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFun
 use napi_derive::napi;
 
 use crate::engine::Engine;
-use crate::error::Result;
+use crate::error::{err, Result};
+use crate::hardware::{self, HardwareInfo};
 use crate::options::{GenerateOptions, ModelConfig};
 
 /// Which accelerator this binary was compiled with: "cuda", "vulkan" or "cpu".
@@ -23,6 +24,12 @@ pub fn build_backend() -> &'static str {
     }
 }
 
+/// CPU cores and instruction sets, plus every compute device with its free memory.
+#[napi]
+pub fn hardware_info() -> Result<HardwareInfo> {
+    hardware::info()
+}
+
 /// Loads a GGUF model on the libuv thread pool; the event loop stays free.
 #[napi]
 pub fn load_model(config: ModelConfig) -> AsyncTask<LoadTask> {
@@ -31,19 +38,29 @@ pub fn load_model(config: ModelConfig) -> AsyncTask<LoadTask> {
 
 #[napi]
 pub struct NativeModel {
-    engine: Arc<Engine>,
+    engine: Option<Arc<Engine>>,
 }
 
 #[napi]
 impl NativeModel {
     /// Resolves with the full completion once generation finishes.
     #[napi]
-    pub fn generate(&self, prompt: String, options: Option<GenerateOptions>) -> AsyncTask<GenerateTask> {
-        AsyncTask::new(GenerateTask {
-            engine: self.engine.clone(),
+    pub fn generate(
+        &self,
+        prompt: String,
+        options: Option<GenerateOptions>,
+        cancel: Option<&CancelHandle>,
+    ) -> Result<AsyncTask<GenerateTask>> {
+        let engine = self.engine()?;
+        let cancel_flag = cancel
+            .map(|h| h.flag.clone())
+            .unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
+        Ok(AsyncTask::new(GenerateTask {
+            engine,
             prompt,
             options: options.unwrap_or_default(),
-        })
+            cancel: cancel_flag,
+        }))
     }
 
     /// Calls `callback(err, chunk)` per text piece, then `callback(null, null)` when finished.
@@ -53,8 +70,8 @@ impl NativeModel {
         prompt: String,
         options: Option<GenerateOptions>,
         callback: ThreadsafeFunction<Option<String>, ErrorStrategy::CalleeHandled>,
-    ) -> CancelHandle {
-        let engine = self.engine.clone();
+    ) -> Result<CancelHandle> {
+        let engine = self.engine()?;
         let options = options.unwrap_or_default();
         let flag = Arc::new(AtomicBool::new(false));
         let cancel = flag.clone();
@@ -62,12 +79,30 @@ impl NativeModel {
 
         std::thread::spawn(move || {
             let result = engine.generate(&prompt, &options, &cancel, |chunk| {
-                callback.call(Ok(Some(chunk)), mode);
+                if !cancel.load(Ordering::Relaxed) {
+                    callback.call(Ok(Some(chunk)), mode);
+                }
             });
             callback.call(result.map(|()| None), mode);
         });
 
-        CancelHandle { flag }
+        Ok(CancelHandle { flag })
+    }
+
+    /// Deterministically releases native model weights and KV-cache VRAM immediately.
+    #[napi]
+    pub fn close(&mut self) {
+        if let Some(engine) = self.engine.take() {
+            engine.close();
+        }
+    }
+
+    fn engine(&self) -> Result<Arc<Engine>> {
+        self.engine
+            .as_ref()
+            .filter(|e| !e.is_closed())
+            .cloned()
+            .ok_or_else(|| err("LocalModel has been closed"))
     }
 }
 
@@ -78,9 +113,22 @@ pub struct CancelHandle {
 
 #[napi]
 impl CancelHandle {
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self {
+            flag: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
     #[napi]
     pub fn cancel(&self) {
         self.flag.store(true, Ordering::Relaxed);
+    }
+}
+
+impl Default for CancelHandle {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -97,7 +145,9 @@ impl Task for LoadTask {
     }
 
     fn resolve(&mut self, _env: Env, engine: Engine) -> Result<NativeModel> {
-        Ok(NativeModel { engine: Arc::new(engine) })
+        Ok(NativeModel {
+            engine: Some(Arc::new(engine)),
+        })
     }
 }
 
@@ -105,6 +155,7 @@ pub struct GenerateTask {
     engine: Arc<Engine>,
     prompt: String,
     options: GenerateOptions,
+    cancel: Arc<AtomicBool>,
 }
 
 impl Task for GenerateTask {
@@ -113,9 +164,13 @@ impl Task for GenerateTask {
 
     fn compute(&mut self) -> Result<String> {
         let mut text = String::new();
-        let never_cancelled = AtomicBool::new(false);
         self.engine
-            .generate(&self.prompt, &self.options, &never_cancelled, |chunk| text.push_str(&chunk))?;
+            .generate(&self.prompt, &self.options, &self.cancel, |chunk| {
+                text.push_str(&chunk)
+            })?;
+        if self.cancel.load(Ordering::Relaxed) {
+            return Err(err("generation aborted"));
+        }
         Ok(text)
     }
 

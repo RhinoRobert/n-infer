@@ -11,8 +11,12 @@ crate-type = ["cdylib"]
 [dependencies]
 napi = { version = "2", default-features = false, features = ["napi6", "async"] }
 napi-derive = "2"
-llama-cpp-2 = "=0.1.160"
+# `common` exposes llama.cpp's memory fitter, used to pick GPU layers for the free VRAM.
+llama-cpp-2 = { version = "=0.1.160", features = ["common"] }
+# Same version llama-cpp-2 already pins; used for llama.cpp's own CPU feature report.
+llama-cpp-sys-2 = "=0.1.160"
 encoding_rs = "0.8"
+num_cpus = "1"
 
 [build-dependencies]
 napi-build = "2"

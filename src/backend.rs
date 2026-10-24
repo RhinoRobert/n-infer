@@ -18,6 +18,7 @@ pub fn get(verbose: bool) -> Result<&'static LlamaBackend> {
     if let Some(backend) = BACKEND.get() {
         return Ok(backend);
     }
+    crate::hardware::ensure_cpu_supported()?;
     // Left untouched, llama.cpp logs to stderr; otherwise route (and drop) them via tracing.
     if !verbose {
         send_logs_to_tracing(LogOptions::default().with_logs_enabled(false));
