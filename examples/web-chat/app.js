@@ -153,10 +153,11 @@ function renderRich(container, text) {
       container.append(el('pre', '', code.replace(/\n$/, '')));
       return;
     }
-    // The newline that separates prose from a code fence is layout, not content.
-    const prose = part
-      .replace(index > 0 ? /^\n/ : /^$/, '')
-      .replace(index < parts.length - 1 ? /\n$/ : /^$/, '');
+    // The newline that separates prose from a code fence is layout, not content: drop the one
+    // after a closing fence (index > 0) and the one before an opening fence (not the last part).
+    let prose = part;
+    if (index > 0) prose = prose.replace(/^\n/, '');
+    if (index < parts.length - 1) prose = prose.replace(/\n$/, '');
     prose.split(/(`[^`\n]+`)/).forEach((piece) => {
       if (/^`[^`\n]+`$/.test(piece)) container.append(el('code', '', piece.slice(1, -1)));
       else if (piece) container.append(document.createTextNode(piece));
