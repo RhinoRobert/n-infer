@@ -1,9 +1,13 @@
-[package]
+﻿[package]
 name = "n-infer"
-version = "0.1.0"
+version = "0.1.0-beta.0"
 edition = "2021"
+rust-version = "1.80"
 authors = ["Robert Serrano"]
 license = "MIT"
+description = "In-process GGUF inference for Node.js (llama.cpp via napi-rs)"
+repository = "https://github.com/RhinoRobert/n-infer"
+publish = false # shipped to npm, not crates.io
 
 [lib]
 crate-type = ["cdylib"]
@@ -17,6 +21,11 @@ llama-cpp-2 = { version = "=0.1.160", features = ["common"] }
 llama-cpp-sys-2 = "=0.1.160"
 encoding_rs = "0.8"
 num_cpus = "1"
+sha2 = "0.10"
+
+# Apple GPUs: Metal is the only accelerator there, so it is always on.
+[target.'cfg(target_os = "macos")'.dependencies]
+llama-cpp-2 = { version = "=0.1.160", features = ["common", "metal"] }
 
 [build-dependencies]
 napi-build = "2"

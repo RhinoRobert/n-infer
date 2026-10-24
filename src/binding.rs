@@ -1,4 +1,4 @@
-//! The N-API surface: everything JavaScript can see.
+//! The N-API surface: everything JavaScript can see. Kept thin: check arguments, call the engine.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -7,18 +7,31 @@ use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 
-use crate::engine::Engine;
-use crate::error::{err, Result};
+use crate::engine::{Engine, Event, Request};
+use crate::error::err;
 use crate::hardware::{self, HardwareInfo};
-use crate::options::{GenerateOptions, ModelConfig};
+use crate::options::{
+    validate_messages, validate_segments, ChatMessage, GenerateOptions, ModelConfig, PromptSegment,
+};
 
-/// Which accelerator this binary was compiled with: "cuda", "vulkan" or "cpu".
+/// Called with `(error, chunk)` for each piece of text, then `(null, null)` when finished.
+type Callback = ThreadsafeFunction<Option<String>, ErrorStrategy::CalleeHandled>;
+
+/// The crate version, so the JavaScript loader can check it is paired with the right binary.
+#[napi]
+pub fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+/// Which accelerator this binary was compiled with: "cuda", "vulkan", "metal" or "cpu".
 #[napi]
 pub fn build_backend() -> &'static str {
     if cfg!(feature = "cuda") {
         "cuda"
     } else if cfg!(feature = "vulkan") {
         "vulkan"
+    } else if cfg!(target_os = "macos") {
+        "metal"
     } else {
         "cpu"
     }
@@ -27,7 +40,7 @@ pub fn build_backend() -> &'static str {
 /// CPU cores and instruction sets, plus every compute device with its free memory.
 #[napi]
 pub fn hardware_info() -> Result<HardwareInfo> {
-    hardware::info()
+    Ok(hardware::info()?)
 }
 
 /// Loads a GGUF model on the libuv thread pool; the event loop stays free.
@@ -43,53 +56,47 @@ pub struct NativeModel {
 
 #[napi]
 impl NativeModel {
-    /// Resolves with the full completion once generation finishes.
+    /// Starts a generation. Returns at once; text arrives through `callback`.
     #[napi]
-    pub fn generate(
+    pub fn run(
         &self,
-        prompt: String,
+        prompt: Vec<PromptSegment>,
         options: Option<GenerateOptions>,
-        cancel: Option<&CancelHandle>,
-    ) -> Result<AsyncTask<GenerateTask>> {
-        let engine = self.engine()?;
-        let cancel_flag = cancel
-            .map(|h| h.flag.clone())
-            .unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
-        Ok(AsyncTask::new(GenerateTask {
-            engine,
-            prompt,
-            options: options.unwrap_or_default(),
-            cancel: cancel_flag,
-        }))
-    }
-
-    /// Calls `callback(err, chunk)` per text piece, then `callback(null, null)` when finished.
-    #[napi]
-    pub fn stream(
-        &self,
-        prompt: String,
-        options: Option<GenerateOptions>,
-        callback: ThreadsafeFunction<Option<String>, ErrorStrategy::CalleeHandled>,
+        callback: Callback,
     ) -> Result<CancelHandle> {
         let engine = self.engine()?;
-        let options = options.unwrap_or_default();
-        let flag = Arc::new(AtomicBool::new(false));
-        let cancel = flag.clone();
+        validate_segments(&prompt)?;
+        let options = options.unwrap_or_default().validate()?;
+
+        let cancel = Arc::new(AtomicBool::new(false));
         let mode = ThreadsafeFunctionCallMode::NonBlocking;
-
-        std::thread::spawn(move || {
-            let result = engine.generate(&prompt, &options, &cancel, |chunk| {
-                if !cancel.load(Ordering::Relaxed) {
-                    callback.call(Ok(Some(chunk)), mode);
-                }
-            });
-            callback.call(result.map(|()| None), mode);
-        });
-
-        Ok(CancelHandle { flag })
+        let request = Request { prompt, options, cancel: Arc::clone(&cancel) };
+        engine.submit(request, move |event| {
+            match event {
+                Event::Text(text) => callback.call(Ok(Some(text)), mode),
+                Event::Finished => callback.call(Ok(None), mode),
+                Event::Failed(error) => callback.call(Err(error.into()), mode),
+            };
+        })?;
+        Ok(CancelHandle { flag: cancel })
     }
 
-    /// Deterministically releases native model weights and KV-cache VRAM immediately.
+    /// Applies the model's chat template and returns the prompt split into trusted template
+    /// text and untrusted message text.
+    #[napi]
+    pub fn render_chat(&self, messages: Vec<ChatMessage>) -> Result<Vec<PromptSegment>> {
+        validate_messages(&messages)?;
+        Ok(self.engine()?.render_chat(&messages)?)
+    }
+
+    /// Token ids `prompt` becomes, exactly as `run` would tokenize it.
+    #[napi]
+    pub fn tokenize(&self, prompt: Vec<PromptSegment>) -> Result<Vec<i32>> {
+        validate_segments(&prompt)?;
+        Ok(self.engine()?.tokenize(&prompt)?)
+    }
+
+    /// Stops all work and frees the model and its contexts before returning.
     #[napi]
     pub fn close(&mut self) {
         if let Some(engine) = self.engine.take() {
@@ -98,14 +105,11 @@ impl NativeModel {
     }
 
     fn engine(&self) -> Result<Arc<Engine>> {
-        self.engine
-            .as_ref()
-            .filter(|e| !e.is_closed())
-            .cloned()
-            .ok_or_else(|| err("LocalModel has been closed"))
+        self.engine.clone().ok_or_else(|| err("LocalModel has been closed").into())
     }
 }
 
+/// Stops one running (or queued) generation.
 #[napi]
 pub struct CancelHandle {
     flag: Arc<AtomicBool>,
@@ -113,22 +117,9 @@ pub struct CancelHandle {
 
 #[napi]
 impl CancelHandle {
-    #[napi(constructor)]
-    pub fn new() -> Self {
-        Self {
-            flag: Arc::new(AtomicBool::new(false)),
-        }
-    }
-
     #[napi]
     pub fn cancel(&self) {
         self.flag.store(true, Ordering::Relaxed);
-    }
-}
-
-impl Default for CancelHandle {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -141,40 +132,10 @@ impl Task for LoadTask {
     type JsValue = NativeModel;
 
     fn compute(&mut self) -> Result<Engine> {
-        Engine::load(&self.config)
+        Ok(Engine::load(&self.config)?)
     }
 
     fn resolve(&mut self, _env: Env, engine: Engine) -> Result<NativeModel> {
-        Ok(NativeModel {
-            engine: Some(Arc::new(engine)),
-        })
-    }
-}
-
-pub struct GenerateTask {
-    engine: Arc<Engine>,
-    prompt: String,
-    options: GenerateOptions,
-    cancel: Arc<AtomicBool>,
-}
-
-impl Task for GenerateTask {
-    type Output = String;
-    type JsValue = String;
-
-    fn compute(&mut self) -> Result<String> {
-        let mut text = String::new();
-        self.engine
-            .generate(&self.prompt, &self.options, &self.cancel, |chunk| {
-                text.push_str(&chunk)
-            })?;
-        if self.cancel.load(Ordering::Relaxed) {
-            return Err(err("generation aborted"));
-        }
-        Ok(text)
-    }
-
-    fn resolve(&mut self, _env: Env, text: String) -> Result<String> {
-        Ok(text)
+        Ok(NativeModel { engine: Some(Arc::new(engine)) })
     }
 }

@@ -98,10 +98,8 @@ fn compiled_features() -> Vec<String> {
 /// instruction on older CPUs. Fail with a readable error before any native code runs.
 pub fn ensure_cpu_supported() -> Result<()> {
     let detected = detected_features();
-    let missing: Vec<String> = compiled_features()
-        .into_iter()
-        .filter(|f| !detected.contains(f))
-        .collect();
+    let missing: Vec<String> =
+        compiled_features().into_iter().filter(|f| !detected.contains(f)).collect();
     if missing.is_empty() {
         return Ok(());
     }
