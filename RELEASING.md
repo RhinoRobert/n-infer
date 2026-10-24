@@ -6,7 +6,7 @@ How a version gets from `main` to npm. The pipeline is `.github/workflows/releas
 
 Publishing is permanent (npm versions can never be re-used), so the first one goes step by step:
 
-1. **Open a pull request** from `release-prep` into `main` and wait for CI to pass on Linux, macOS and Windows. Fix whatever it finds on the branch. Merge when it is green.
+1. **Open a pull request** from `release-prep` into `main` and wait for CI to pass (it runs on Windows). Fix whatever it finds on the branch. Merge when it is green.
 2. **npm organization:** create `@n-infer` (see the setup below). The unscoped name `n-infer` and the scope were free when checked.
 3. **GitHub settings and the one-time token** (see the setup below).
 4. **Dry run:** Actions -> Release -> _Run workflow_ with dry-run on. (The button only appears once `release.yml` is on `main`.) It builds all binaries and checks every package, publishing nothing. Download the artifacts if you want to inspect them.
@@ -14,7 +14,9 @@ Publishing is permanent (npm versions can never be re-used), so the first one go
 6. **Verify** from a clean folder (commands below), then check `npm view n-infer dist-tags`. If `latest` is missing (a first release made only under the `beta` tag), run `npm dist-tag add n-infer@0.1.0-beta.0 latest` so a plain `npm install n-infer` works too.
 7. **Switch to trusted publishing** and delete the token (setup step 2).
 
-The Linux CUDA add-on is marked experimental: if its build fails, the release still goes out without it (the README says so). Check the build log and package size before promoting it.
+The CUDA add-on is marked experimental: CI builds it against CUDA 12.8 (locally it was tested with 13.4), and if that build fails the release still goes out with the CPU package only, because the main package lists exactly the binary packages that were built. Check the build log before promoting a release that lacks it.
+
+Only Windows x64 is published. Linux and macOS binaries can be added later by adding targets to `scripts/stage-npm.js`, `lib/native.js` and the workflow matrix, after the code has been tested there.
 
 ## One-time setup (maintainer)
 

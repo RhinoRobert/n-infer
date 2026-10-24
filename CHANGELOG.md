@@ -18,7 +18,7 @@ First public beta.
 - Machine-aware defaults: physical-core threads, VRAM-fitted GPU layers (`gpuLayers: 'auto'`), batch sizes.
 - `hardware()` and `backend` exports; `modelSha256` to pin a model file.
 - Bounded worker pool (`maxConcurrent`, `maxQueue`) with a fixed memory footprint.
-- Prebuilt binaries for Windows x64, Linux x64/arm64 and macOS arm64 (Metal), plus opt-in CUDA add-ons.
+- Prebuilt binaries for Windows x64 (CPU, plus an opt-in CUDA add-on). The source also builds on Linux and macOS, but those are not tested or published yet.
 
 ### Security
 

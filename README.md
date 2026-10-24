@@ -17,7 +17,7 @@ for await (const piece of ai.stream('Write a haiku about Rust:')) process.stdout
 - **Safe by default.** Untrusted text can never become control tokens, inputs are bounded, `close()` and abort are deterministic, and a native failure can never leave a caller hanging. See the [threat model](docs/THREAT_MODEL.md).
 - **Typed.** Ships TypeScript declarations; `AbortSignal`, `using` / `Symbol.dispose` and async iteration work as you would expect.
 
-> **Status: beta.** The API may still change before 1.0. Linux, Windows and macOS binaries are built in CI; macOS and Linux arm64 have not yet seen the same real-world testing as Windows x64.
+> **Status: beta, Windows x64.** The API may still change before 1.0. Prebuilt binaries are published for Windows x64, which is the platform it is built and tested on. The source is portable, so you can build it on Linux or macOS yourself, but that is not tested or supported yet.
 
 ## Install
 
@@ -27,20 +27,19 @@ npm install n-infer@beta
 
 While n-infer is in beta, `@beta` selects the latest beta release.
 
-npm picks the right prebuilt binary for your machine: Windows x64, Linux x64 / arm64 (glibc), or macOS arm64 (Metal, built in). Node.js 20.19 or newer.
+This installs the prebuilt CPU binary for **Windows x64** (any CPU with AVX2, roughly 2013 or newer) and needs Node.js 20.19 or newer. It also needs the Microsoft Visual C++ Redistributable, which most Windows machines already have.
 
-**NVIDIA GPU (Windows or Linux x64)** is an opt-in add-on, so CPU users do not download it:
+**NVIDIA GPU** is an opt-in add-on, so CPU users do not download it:
 
 ```bash
-npm install @n-infer/win32-x64-msvc-cuda@beta      # Windows
-npm install @n-infer/linux-x64-gnu-cuda@beta       # Linux (experimental in the first beta)
+npm install @n-infer/win32-x64-msvc-cuda@beta
 ```
 
-It needs a recent NVIDIA driver and the CUDA 12 runtime libraries (`cudart`, `cublas`) on `PATH` / `LD_LIBRARY_PATH`; installing the CUDA Toolkit provides them. If the add-on cannot load, n-infer falls back to the CPU build and prints a warning. Check what you got:
+It needs a recent NVIDIA driver and the CUDA 12 runtime libraries (`cublas`) on your `PATH`; installing the CUDA Toolkit provides them. If the add-on cannot load, n-infer falls back to the CPU build and prints a warning. Check what you got:
 
 ```js
 import { backend, hardware } from 'n-infer';
-console.log(backend); // 'cuda' | 'metal' | 'vulkan' | 'cpu'
+console.log(backend); // 'cuda' | 'cpu' (also 'vulkan' | 'metal' in source builds)
 console.log(hardware()); // cores, CPU features, every device and its free memory
 ```
 
@@ -137,20 +136,20 @@ On this machine the GPU is at the hardware ceiling (memory bandwidth), and CPU-o
 
 [node-llama-cpp](https://github.com/withcatai/node-llama-cpp) is the established, full-featured option. n-infer is younger and narrower, and aims to be the best choice when latency, footprint and safety defaults matter most.
 
-|                                             | n-infer                       | node-llama-cpp              |
-| ------------------------------------------- | ----------------------------- | --------------------------- |
-| Engine                                      | llama.cpp via Rust (napi-rs)  | llama.cpp via C++           |
-| JavaScript runtime dependencies             | **0**                         | many (CLI and tooling deps) |
-| Prebuilt CPU / CUDA / Metal                 | yes (CUDA as opt-in add-on)   | yes (plus Vulkan)           |
-| Chat templates                              | yes (model's own)             | yes (many wrappers)         |
-| Untrusted text cannot become control tokens | yes, by construction, tested  | yes                         |
-| Warm KV prefix reuse                        | automatic                     | yes                         |
-| Auto GPU fitting / auto thread sizing       | yes                           | partly                      |
-| JSON-schema / grammar-constrained output    | **not yet** (planned)         | yes                         |
-| Function calling                            | **not yet**                   | yes                         |
-| Embeddings / reranking                      | **not yet** (planned)         | yes                         |
-| CLI, model downloader                       | no (the core never downloads) | yes                         |
-| Vulkan builds                               | planned                       | yes                         |
+|                                             | n-infer                        | node-llama-cpp                                   |
+| ------------------------------------------- | ------------------------------ | ------------------------------------------------ |
+| Engine                                      | llama.cpp via Rust (napi-rs)   | llama.cpp via C++                                |
+| JavaScript runtime dependencies             | **0**                          | many (CLI and tooling deps)                      |
+| Prebuilt binaries                           | Windows x64 (CPU, CUDA add-on) | Windows, Linux, macOS (CPU, CUDA, Vulkan, Metal) |
+| Chat templates                              | yes (model's own)              | yes (many wrappers)                              |
+| Untrusted text cannot become control tokens | yes, by construction, tested   | yes                                              |
+| Warm KV prefix reuse                        | automatic                      | yes                                              |
+| Auto GPU fitting / auto thread sizing       | yes                            | partly                                           |
+| JSON-schema / grammar-constrained output    | **not yet** (planned)          | yes                                              |
+| Function calling                            | **not yet**                    | yes                                              |
+| Embeddings / reranking                      | **not yet** (planned)          | yes                                              |
+| CLI, model downloader                       | no (the core never downloads)  | yes                                              |
+| Vulkan builds                               | planned                        | yes                                              |
 
 If you need structured output, function calling or embeddings today, use node-llama-cpp. If you want a small, fast, auditable local-inference core for a bot or service, use n-infer.
 
@@ -171,7 +170,7 @@ npm run build:portable # what releases use: runs on any AVX2-class CPU
 
 ## Roadmap
 
-Toward 1.0: JSON-schema / grammar-constrained output, embeddings, function calling, Vulkan, more platforms (musl, armv7), and a published benchmark against other libraries. See [CHANGELOG.md](CHANGELOG.md).
+Toward 1.0: JSON-schema / grammar-constrained output, embeddings, function calling, Vulkan, Linux and macOS prebuilt binaries (the code is portable but only Windows is tested today), and a published benchmark against other libraries. See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

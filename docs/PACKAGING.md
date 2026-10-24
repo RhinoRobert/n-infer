@@ -4,13 +4,15 @@ How the binaries are built and shipped, and the experiments behind those choices
 
 ## What ships
 
-| Package                             | Contents                                                     | Packed size |
-| ----------------------------------- | ------------------------------------------------------------ | ----------- |
-| `n-infer`                           | JavaScript and types, no dependencies, no binary             | 10 kB       |
-| `@n-infer/<platform>`               | CPU binary (macOS arm64: Metal)                              | 2.1 MB      |
-| `@n-infer/<platform>-cuda` (opt-in) | CUDA binary; falls back to the CPU package if it cannot load | 20 MB       |
+| Package                                 | Contents                                                     | Packed size |
+| --------------------------------------- | ------------------------------------------------------------ | ----------- |
+| `n-infer`                               | JavaScript and types, no dependencies, no binary             | 10 kB       |
+| `@n-infer/win32-x64-msvc`               | CPU binary (AVX2 and newer)                                  | 2.1 MB      |
+| `@n-infer/win32-x64-msvc-cuda` (opt-in) | CUDA binary; falls back to the CPU package if it cannot load | 20 MB       |
 
-`npm install n-infer` pulls the one CPU package that matches the machine (`optionalDependencies` filtered by `os`/`cpu`/`libc`). GPU add-ons are separate so CPU users never download them.
+Only Windows x64 is published, because that is the platform the code is built and tested on. The source is portable, and adding another platform means adding it to `scripts/stage-npm.js`, `lib/native.js` and the release matrix once it has been tested.
+
+`npm install n-infer` pulls the CPU package (`optionalDependencies`, filtered by `os`/`cpu`). GPU add-ons are separate so CPU users never download them. The repository's own `package.json` deliberately does not list these dependencies, because they point at packages that exist only after a release (which would break `npm ci`): `scripts/stage-npm.js` writes them into the **published** main package, listing exactly the binary packages that were built.
 
 ## Experiment 1: can the CUDA add-on avoid needing the CUDA toolkit?
 
@@ -28,7 +30,7 @@ So the Windows add-on needs the CUDA runtime on the machine (installing the CUDA
 
 All four cases were verified from a clean project installed from the packed tarballs: CUDA present (loads CUDA), CUDA runtime missing (warns, runs on CPU), only `CUDA_PATH` set (repairs `PATH`, loads CUDA), CPU package only.
 
-**Linux:** the upstream build links cudart, cuBLAS and cuBLASLt statically, so only the NVIDIA driver is needed. The resulting binary will be much larger; its size is the first thing to check in the CI build (`linux-x64-gnu-cuda`). If it is too big to publish comfortably, switch that target to dynamic linking and document the runtime requirement, as on Windows.
+**Linux (not published):** the upstream build links cudart, cuBLAS and cuBLASLt statically, so only the NVIDIA driver would be needed, at the cost of a much larger binary. That is worth measuring before adding a Linux CUDA package.
 
 **CUDA version:** DLL names carry the major version (`cublas64_12` vs `cublas64_13`), so a binary built against CUDA 12 needs a CUDA 12 runtime. Release builds use CUDA 12.8 (works with current drivers); builds from source use whatever is installed.
 

@@ -1,5 +1,6 @@
 name: CI
 
+# Windows x64 is the supported platform: it is where the binaries are built and tested.
 on:
   push:
     branches: [main]
@@ -18,7 +19,7 @@ env:
 jobs:
   # Formatting, lints, types and package contents: fast, no model needed.
   lint:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -30,18 +31,24 @@ jobs:
           toolchain: stable
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
-      - run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev
+      - run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
       - run: npm ci
       - run: cargo fmt --check
       - run: npm run format:check
       - run: npm run test:types
       - run: cargo clippy --all-targets -- -D warnings
       - run: node scripts/check-pack.js
+
+  # Dependency advisories, licenses and sources. (This action runs in a Linux container.)
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: EmbarkStudios/cargo-deny-action@c3bbe7e4e3f7baeee1a3dd9aec0a3b2aded580fb # v2.1.1
 
   # The JavaScript layer needs no native binary, so check the oldest supported Node too.
   unit-node-20:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -50,14 +57,9 @@ jobs:
       - run: npm ci
       - run: npm run test:unit
 
-  # Build the CPU binary on every platform we ship and run the whole suite against it.
+  # Build the CPU binary and run the whole suite against it, with real (small) models.
   test:
-    name: test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -68,10 +70,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
-      - if: startsWith(matrix.os, 'ubuntu')
-        run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev
-      - if: matrix.os == 'windows-latest'
-        run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+      - run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
       - run: npm ci
       - run: npm run build:portable -- --cpu
       - run: cargo test
