@@ -44,6 +44,18 @@ console.log(hardware()); // cores, CPU features, every device and its free memor
 
 You need a model in GGUF format, for example from [Hugging Face](https://huggingface.co/models?library=gguf).
 
+## Try it in your browser
+
+A small chat app ships in the repository. It loads a model inside the Node process and streams replies to a page with live speed and GPU stats. It finds models you already have (including Ollama's folder, without Ollama running).
+
+```bash
+git clone https://github.com/RhinoRobert/n-infer && cd n-infer
+npm install && npm run build
+npm run demo            # then open http://127.0.0.1:3939
+```
+
+Add `--model ./your.gguf` or `--models-dir ./models` to point it at your own files. It listens on 127.0.0.1 only.
+
 ## Using it
 
 ### Chat

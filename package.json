@@ -81,7 +81,8 @@
     "format:check": "prettier --check .",
     "stage": "node scripts/stage-npm.js",
     "pack:check": "node scripts/check-pack.js",
-    "example": "node examples/basic.js"
+    "example": "node examples/basic.js",
+    "demo": "node examples/web-chat/server.js"
   },
   "devDependencies": {
     "@napi-rs/cli": "^2.18.4",
