@@ -5,25 +5,22 @@
   "author": "Robert Serrano",
   "license": "MIT",
   "type": "module",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    }
+  },
   "engines": {
     "node": ">=18"
   },
   "files": [
-    "index.js",
-    "index.d.ts",
-    "*.node"
+    "lib"
   ],
   "napi": {
-    "name": "n-infer",
-    "triples": {
-      "defaults": true,
-      "additional": [
-        "aarch64-unknown-linux-gnu",
-        "armv7-unknown-linux-gnueabihf"
-      ]
-    }
+    "name": "n-infer"
   },
   "scripts": {
     "build": "node scripts/build.js",

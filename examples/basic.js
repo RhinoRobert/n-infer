@@ -1,14 +1,14 @@
-import { LocalModel, backend } from '../index.js';
+import { LocalModel, backend } from '../lib/index.js';
 
-const modelPath = process.argv[2];
+const [modelPath, gpuLayers = '0'] = process.argv.slice(2);
 if (!modelPath) {
   console.error('usage: node examples/basic.js <model.gguf> [gpuLayers]');
   process.exit(1);
 }
 
-const ai = new LocalModel({ modelPath, gpuLayers: Number(process.argv[3] ?? 0) });
-
+const ai = new LocalModel({ modelPath, gpuLayers: Number(gpuLayers) });
 console.log(`backend: ${backend}`);
+
 console.time('load');
 await ai.init();
 console.timeEnd('load');

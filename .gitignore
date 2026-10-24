@@ -1,6 +1,6 @@
-node_modules/
+﻿node_modules/
 target/
 *.node
-native.d.ts
+napi-generated.d.ts
 models/
 *.gguf

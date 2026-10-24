@@ -1,22 +1,24 @@
-// Builds the native addon. Picks CUDA when nvcc is on PATH, otherwise CPU.
-//   node scripts/build.js [--cuda | --cpu | --vulkan] [--debug]
+﻿// Builds the native addon into lib/. Uses CUDA when nvcc is on PATH, otherwise CPU.
+//   node scripts/build.js [--cuda | --vulkan | --cpu] [--debug]
 import { spawnSync } from 'node:child_process';
 
-const args = new Set(process.argv.slice(2));
+const flags = new Set(process.argv.slice(2));
 
-function hasNvcc() {
-  return spawnSync('nvcc', ['--version'], { stdio: 'ignore', shell: true }).status === 0;
-}
+const hasNvcc = () => spawnSync('nvcc', ['--version'], { stdio: 'ignore', shell: true }).status === 0;
 
-let feature = null;
-if (args.has('--cuda')) feature = 'cuda';
-else if (args.has('--vulkan')) feature = 'vulkan';
-else if (!args.has('--cpu') && hasNvcc()) feature = 'cuda';
+const feature = flags.has('--cuda')
+  ? 'cuda'
+  : flags.has('--vulkan')
+    ? 'vulkan'
+    : !flags.has('--cpu') && hasNvcc()
+      ? 'cuda'
+      : null;
 
-const cliArgs = ['napi', 'build', '--no-js', '--dts', 'native.d.ts'];
-if (!args.has('--debug')) cliArgs.push('--release');
-if (feature) cliArgs.push('--features', feature);
+// `lib` is napi's output directory; napi-generated.d.ts is a generated file we do not use.
+const args = ['napi', 'build', '--js', 'false', '--dts', 'napi-generated.d.ts'];
+if (!flags.has('--debug')) args.push('--release');
+if (feature) args.push('--features', feature);
+args.push('lib');
 
-console.log(`n-infer: building (${feature ?? 'cpu'}${args.has('--debug') ? ', debug' : ''})`);
-const res = spawnSync('npx', cliArgs, { stdio: 'inherit', shell: true });
-process.exit(res.status ?? 1);
+console.log(`n-infer: building (${feature ?? 'cpu'}${flags.has('--debug') ? ', debug' : ''})`);
+process.exit(spawnSync('npx', args, { stdio: 'inherit', shell: true }).status ?? 1);
