@@ -67,7 +67,7 @@
     "demo": "node examples/web-chat/server.js"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^2.18.4",
+    "@napi-rs/cli": "^3.10.9",
     "@types/node": "^20.14.0",
     "prettier": "^3.3.0",
     "typescript": "^5.5.0"
