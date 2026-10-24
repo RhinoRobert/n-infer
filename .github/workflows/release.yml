@@ -59,11 +59,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The CPU binary is built where CI builds and tests it (windows-latest), so what ships is
+          # what the test suite ran against.
           - { target: win32-x64-msvc, os: windows-latest, flags: '--cpu --portable' }
+          # The CUDA job needs windows-2022: it has Visual Studio 2022, while windows-latest moved
+          # to Visual Studio 2026, which CUDA 12.8 does not support.
           # CUDA 12.8 here; the local tests used CUDA 13.4, so this is built for the first time in CI.
           - {
               target: win32-x64-msvc-cuda,
-              os: windows-latest,
+              os: windows-2022,
               flags: '--cuda --portable',
               cuda: true,
               experimental: true,
@@ -87,6 +91,23 @@ jobs:
           cuda: '12.8.0'
           method: network
           sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "visual_studio_integration"]'
+      # The toolkit installer does not always register its Visual Studio integration on a hosted
+      # runner, and CMake then stops with "No CUDA toolset found". Copy the build customizations
+      # into Visual Studio ourselves.
+      - if: matrix.cuda
+        shell: pwsh
+        run: |
+          $src = Join-Path $env:CUDA_PATH 'extras\visual_studio_integration\MSBuildExtensions'
+          $instances = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -all -products * -property installationPath
+          foreach ($vs in $instances) {
+            # v170 = Visual Studio 2022, v180 = Visual Studio 2026: fill whichever this instance has.
+            foreach ($vc in Get-ChildItem (Join-Path $vs 'MSBuild\Microsoft\VC') -Directory -Filter 'v1?0' -ErrorAction SilentlyContinue) {
+              $dest = Join-Path $vc.FullName 'BuildCustomizations'
+              New-Item -ItemType Directory -Force $dest | Out-Null
+              Copy-Item "$src\*" $dest -Force
+              "$dest -> " + ((Get-ChildItem $dest -Filter 'CUDA*' | Select-Object -ExpandProperty Name) -join ', ')
+            }
+          }
       - run: npm ci
       - run: npm run build -- ${{ matrix.flags }}
       - name: Load the binary (CPU builds can run on the runner)
@@ -98,32 +119,27 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bin-${{ matrix.target }}
-          path: out/${{ matrix.target }}
+          # Upload the `out` folder, so the artifact holds <target>/n-infer.node and the layout is
+          # the same whether one binary was built or several.
+          path: out
           if-no-files-found: error
 
-  publish:
+  # Stages and checks every package. Needs no secrets and no approval, so a dry run can use it
+  # freely; the same output is what the publish job uploads to npm.
+  stage:
     needs: [verify, build]
     runs-on: ubuntu-latest
-    # Protect this environment in repo settings so a human must approve every publish.
-    environment: npm-publish
-    permissions:
-      contents: write # create the GitHub release
-      id-token: write # npm provenance and trusted publishing
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
-      - run: npm install -g npm@latest # trusted publishing needs npm >= 11.5.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: bin-*
+          merge-multiple: true # artifacts/<target>/n-infer.node, however many targets were built
           path: artifacts
-      - name: Lay out artifacts as artifacts/<target>/n-infer.node
-        run: |
-          for dir in artifacts/bin-*; do mv "$dir" "artifacts/${dir#artifacts/bin-}"; done
-          find artifacts -type f
+      - run: find artifacts -type f
       - run: node scripts/stage-npm.js artifacts
       - name: Name release assets by platform (they would all be called n-infer.node)
         run: |
@@ -135,25 +151,66 @@ jobs:
           ls -l release-assets
       - name: Check every package's contents
         run: for dir in dist/npm/*/; do node scripts/check-pack.js "$dir"; done
-      - name: Publish the binary packages, then the main package
-        if: ${{ github.event_name == 'push' || inputs.dry-run == false }}
+      - run: npm install -g npm@latest # `npm stage` needs npm >= 11.15 (Node 22 ships an older one)
+      - name: Rehearse staging (changes nothing on npm)
         env:
-          # Optional: with trusted publishing configured on npm this token is not needed.
+          NPM_TAG: ${{ needs.verify.outputs.npm-tag }} # npm refuses a prerelease without --tag
+        run: for dir in dist/npm/*/; do npm stage publish "$dir" --dry-run --access public --tag "$NPM_TAG"; done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staged-packages
+          path: |
+            dist/npm
+            release-assets
+          if-no-files-found: error
+
+  # The only job that touches npm, and it can only STAGE: the token is "stage only", so nothing goes
+  # live until the maintainer approves each package on npm with 2FA (`npm stage approve`, or the
+  # "Staged Packages" page). It runs for a pushed version tag, never for a dry run, and the
+  # protected `npm-publish` environment (a required reviewer, v* tags only) must approve it first.
+  publish:
+    needs: [verify, stage]
+    if: ${{ github.event_name == 'push' || inputs.dry-run == false }}
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # npm provenance and trusted publishing
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest # `npm stage` needs npm >= 11.15; trusted publishing >= 11.5.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged-packages
+          path: staged
+      - name: Stage the binary packages, then the main package (nothing goes live yet)
+        env:
+          # A stage-only npm token (cannot publish directly). It can be replaced by a stage-only
+          # trusted-publishing configuration once every package exists on npm.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TAG: ${{ needs.verify.outputs.npm-tag }}
         run: |
-          for dir in dist/npm/*/; do
+          for dir in staged/dist/npm/*/; do
             [ "$(basename "$dir")" = n-infer ] && continue
-            npm publish "$dir" --provenance --access public --tag "$NPM_TAG"
+            npm stage publish "$dir" --provenance --access public --tag "$NPM_TAG"
           done
-          npm publish dist/npm/n-infer --provenance --access public --tag "$NPM_TAG"
-      - name: Rehearsal (dry run)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run != false }}
+          npm stage publish staged/dist/npm/n-infer --provenance --access public --tag "$NPM_TAG"
+      - name: Tell the maintainer what to approve
         run: |
-          for dir in dist/npm/*/; do npm publish "$dir" --dry-run --access public; done
+          {
+            echo "### Staged on npm, not live yet"
+            echo "Approve every package with 2FA, **binary packages first, \`n-infer\` last**:"
+            echo '```'
+            echo "npm stage list"
+            echo "npm stage approve <stage-id>   # repeat for each, enter your 2FA code"
+            echo '```'
+            echo "Or use https://www.npmjs.com/ -> Staged Packages."
+          } >> "$GITHUB_STEP_SUMMARY"
       - uses: softprops/action-gh-release@e598afbe1493e6b1bafb1f389cabb956eab91231 # v3.0.3
-        if: ${{ github.event_name == 'push' }}
         with:
           generate_release_notes: true
           prerelease: ${{ contains(needs.verify.outputs.version, '-') }}
-          files: release-assets/*.node
+          files: staged/release-assets/*.node
