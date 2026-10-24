@@ -1,9 +1,30 @@
 {
   "name": "n-infer",
-  "version": "0.1.0",
-  "description": "Native in-process GGUF inference for Node.js (Rust + llama.cpp via napi-rs)",
+  "version": "0.1.0-beta.0",
+  "description": "Run GGUF language models inside Node.js: in-process llama.cpp via Rust, tuned for low latency. No server, no Python.",
+  "keywords": [
+    "llm",
+    "llama",
+    "llama.cpp",
+    "gguf",
+    "inference",
+    "local-ai",
+    "cuda",
+    "metal",
+    "napi",
+    "rust",
+    "chat"
+  ],
   "author": "Robert Serrano",
   "license": "MIT",
+  "homepage": "https://github.com/RhinoRobert/n-infer#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RhinoRobert/n-infer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RhinoRobert/n-infer/issues"
+  },
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -14,10 +35,11 @@
     }
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.19"
   },
   "files": [
-    "lib"
+    "lib/*.js",
+    "lib/index.d.ts"
   ],
   "napi": {
     "name": "n-infer"
@@ -26,10 +48,28 @@
     "build": "node scripts/build.js",
     "build:cpu": "node scripts/build.js --cpu",
     "build:cuda": "node scripts/build.js --cuda",
+    "build:portable": "node scripts/build.js --portable",
+    "build:baseline": "node scripts/build.js --baseline",
     "build:debug": "node scripts/build.js --debug",
-    "example": "node examples/basic.js"
+    "test": "node scripts/test.js",
+    "test:unit": "node scripts/test.js unit",
+    "test:integration": "node scripts/test.js integration",
+    "test:rust": "cargo test",
+    "test:types": "tsc --project test/types/tsconfig.json",
+    "test:fetch": "node scripts/fetch-test-model.js",
+    "lint": "npm run lint:rust && npm run format:check && npm run test:types",
+    "lint:rust": "cargo fmt --check && cargo clippy --all-targets -- -D warnings",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "stage": "node scripts/stage-npm.js",
+    "pack:check": "node scripts/check-pack.js",
+    "example": "node examples/basic.js",
+    "demo": "node examples/web-chat/server.js"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^2.18.4"
+    "@napi-rs/cli": "^2.18.4",
+    "@types/node": "^20.14.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0"
   }
 }

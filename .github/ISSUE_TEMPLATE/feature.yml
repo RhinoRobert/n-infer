@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What are you trying to do?
+      description: Describe the goal first; the API you have in mind can come second.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like n-infer to do?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried or considered?

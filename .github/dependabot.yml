@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    # llama-cpp-2 is pinned exactly: bump it deliberately, with a benchmark and a test run.
+    ignore:
+      - dependency-name: llama-cpp-2
+      - dependency-name: llama-cpp-sys-2
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

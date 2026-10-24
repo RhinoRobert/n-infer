@@ -1,0 +1,29 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The smallest code that shows it. Name the model (family, size, quantization) if it matters.
+      render: js
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: 'Output of `node -e "import(\"n-infer\").then(m => console.log(m.backend, JSON.stringify(m.hardware(), null, 2)))"`, plus Node.js and n-infer versions.'
+      render: text
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: Security problems should not be filed here. See SECURITY.md.

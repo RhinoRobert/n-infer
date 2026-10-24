@@ -1,0 +1,12 @@
+{
+  "name": "n-infer-bench",
+  "private": true,
+  "type": "module",
+  "description": "Reproducible benchmark of n-infer against other local-inference libraries. Not published.",
+  "scripts": {
+    "bench": "node compare.js"
+  },
+  "optionalDependencies": {
+    "node-llama-cpp": "^3.0.0"
+  }
+}
