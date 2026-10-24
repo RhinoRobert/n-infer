@@ -25,7 +25,7 @@ Only Windows x64 is published. Linux and macOS binaries can be added later by ad
    - add a short-lived _granular access token_ (read/write, `n-infer` and `@n-infer/*`, 2FA bypass for automation) as the repository secret `NPM_TOKEN`, and run the release;
    - then, for every package (`n-infer` and each `@n-infer/<target>`), open its **Settings -> Trusted Publisher** on npmjs.com and link `RhinoRobert/n-infer`, workflow `release.yml`, environment `npm-publish`;
    - delete the `NPM_TOKEN` secret. Later releases use OIDC only.
-3. **GitHub settings:** create an environment named `npm-publish` with yourself as a required reviewer; protect `main` (pull request + passing CI); turn on secret scanning, Dependabot alerts and private vulnerability reporting.
+3. **GitHub settings:** the `npm-publish` environment exists with the maintainer as required reviewer and is restricted to `v*` tags, so only a pushed version tag can reach the publish job, and only after approval. (Dry runs use a separate job and need no approval.) Still to do by hand: protect `main` (pull request + passing CI); turn on secret scanning, Dependabot alerts and private vulnerability reporting.
 
 ## Cutting a release
 

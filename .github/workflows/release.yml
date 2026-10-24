@@ -101,21 +101,16 @@ jobs:
           path: out/${{ matrix.target }}
           if-no-files-found: error
 
-  publish:
+  # Stages and checks every package. Needs no secrets and no approval, so a dry run can use it
+  # freely; the same output is what the publish job uploads to npm.
+  stage:
     needs: [verify, build]
     runs-on: ubuntu-latest
-    # Protect this environment in repo settings so a human must approve every publish.
-    environment: npm-publish
-    permissions:
-      contents: write # create the GitHub release
-      id-token: write # npm provenance and trusted publishing
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
-      - run: npm install -g npm@latest # trusted publishing needs npm >= 11.5.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: bin-*
@@ -135,25 +130,50 @@ jobs:
           ls -l release-assets
       - name: Check every package's contents
         run: for dir in dist/npm/*/; do node scripts/check-pack.js "$dir"; done
+      - name: Rehearse publishing (changes nothing on npm)
+        run: for dir in dist/npm/*/; do npm publish "$dir" --dry-run --access public; done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staged-packages
+          path: |
+            dist/npm
+            release-assets
+          if-no-files-found: error
+
+  # The only job that can change npm. It runs for a pushed version tag, never for a dry run, and
+  # the protected `npm-publish` environment (a required reviewer, v* tags only) must approve it.
+  publish:
+    needs: [verify, stage]
+    if: ${{ github.event_name == 'push' || inputs.dry-run == false }}
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # npm provenance and trusted publishing
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest # trusted publishing needs npm >= 11.5.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged-packages
+          path: staged
       - name: Publish the binary packages, then the main package
-        if: ${{ github.event_name == 'push' || inputs.dry-run == false }}
         env:
-          # Optional: with trusted publishing configured on npm this token is not needed.
+          # Only needed for the very first publish; with trusted publishing configured on npm
+          # for each package this token is not used.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TAG: ${{ needs.verify.outputs.npm-tag }}
         run: |
-          for dir in dist/npm/*/; do
+          for dir in staged/dist/npm/*/; do
             [ "$(basename "$dir")" = n-infer ] && continue
             npm publish "$dir" --provenance --access public --tag "$NPM_TAG"
           done
-          npm publish dist/npm/n-infer --provenance --access public --tag "$NPM_TAG"
-      - name: Rehearsal (dry run)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run != false }}
-        run: |
-          for dir in dist/npm/*/; do npm publish "$dir" --dry-run --access public; done
+          npm publish staged/dist/npm/n-infer --provenance --access public --tag "$NPM_TAG"
       - uses: softprops/action-gh-release@e598afbe1493e6b1bafb1f389cabb956eab91231 # v3.0.3
-        if: ${{ github.event_name == 'push' }}
         with:
           generate_release_notes: true
           prerelease: ${{ contains(needs.verify.outputs.version, '-') }}
-          files: release-assets/*.node
+          files: staged/release-assets/*.node
