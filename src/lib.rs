@@ -7,6 +7,9 @@
 //! - `backend`, `error`: process-wide llama.cpp setup and the crate's error type
 
 #![deny(clippy::all)]
+// napi-derive registers the exported functions only outside `cfg(test)`, so in unit-test builds
+// they look unused.
+#![cfg_attr(test, allow(dead_code))]
 
 mod backend;
 mod binding;
