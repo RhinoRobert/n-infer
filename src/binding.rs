@@ -23,6 +23,12 @@ pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// Tells the addon where its companion libraries live. Called once by the JavaScript loader.
+#[napi]
+pub fn set_backend_dir(dir: String) {
+    crate::backend::set_backend_dir(dir.into());
+}
+
 /// Which accelerator this binary was compiled with: "cuda", "vulkan", "metal" or "cpu".
 #[napi]
 pub fn build_backend() -> &'static str {

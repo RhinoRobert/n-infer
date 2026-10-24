@@ -1,6 +1,7 @@
 // Builds the native addon into lib/.
 //
-//   node scripts/build.js [--cuda | --vulkan | --cpu] [--native | --portable | --baseline] [--debug]
+//   node scripts/build.js [--cuda | --vulkan | --cpu] [--native | --portable | --baseline]
+//                         [--dynamic] [--debug]
 //
 // Accelerator: CUDA is used when nvcc is found, unless --cpu / --vulkan says otherwise.
 //
@@ -20,6 +21,7 @@ const ALLOWED_FLAGS = new Set([
   '--native',
   '--portable',
   '--baseline',
+  '--dynamic',
   '--debug',
 ]);
 const flags = new Set(process.argv.slice(2));
@@ -80,11 +82,12 @@ const napiCli = require.resolve('@napi-rs/cli/scripts/index.js');
 // `lib` is napi's output directory; napi-generated.d.ts is a generated file we do not use.
 const args = [napiCli, 'build', '--js', 'false', '--dts', 'napi-generated.d.ts'];
 if (!flags.has('--debug')) args.push('--release');
-if (feature) args.push('--features', feature);
+const features = [feature, flags.has('--dynamic') && 'dynamic'].filter(Boolean);
+if (features.length > 0) args.push('--features', features.join(','));
 args.push('lib');
 
 console.log(
-  `n-infer: building (${feature ?? 'cpu'}, ${tuning}${flags.has('--debug') ? ', debug' : ''})`,
+  `n-infer: building (${features.join('+') || 'cpu'}, ${tuning}${flags.has('--debug') ? ', debug' : ''})`,
 );
 const result = spawnSync(process.execPath, args, { stdio: 'inherit', shell: false, env });
 process.exit(result.status ?? 1);

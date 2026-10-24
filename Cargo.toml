@@ -35,6 +35,9 @@ default = []
 # Opt-in GPU backends. scripts/build.js enables `cuda` automatically when nvcc is found.
 cuda = ["llama-cpp-2/cuda"]
 vulkan = ["llama-cpp-2/vulkan"]
+# Ship compute backends as separate libraries so the best CPU variant (SSE4.2 ... AVX-512) is
+# picked at runtime. Experimental: see docs/PACKAGING.md.
+dynamic = ["llama-cpp-2/dynamic-backends"]
 
 [profile.release]
 lto = true
