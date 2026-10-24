@@ -59,9 +59,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # windows-2022 has Visual Studio 2022, the toolchain this was developed and tested with.
-          # `windows-latest` moved to Visual Studio 2026, which CUDA 12.8 does not support.
-          - { target: win32-x64-msvc, os: windows-2022, flags: '--cpu --portable' }
+          # The CPU binary is built where CI builds and tests it (windows-latest), so what ships is
+          # what the test suite ran against.
+          - { target: win32-x64-msvc, os: windows-latest, flags: '--cpu --portable' }
+          # The CUDA job needs windows-2022: it has Visual Studio 2022, while windows-latest moved
+          # to Visual Studio 2026, which CUDA 12.8 does not support.
           # CUDA 12.8 here; the local tests used CUDA 13.4, so this is built for the first time in CI.
           - {
               target: win32-x64-msvc-cuda,
