@@ -59,11 +59,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { target: win32-x64-msvc, os: windows-latest, flags: '--cpu --portable' }
+          # windows-2022 has Visual Studio 2022, the toolchain this was developed and tested with.
+          # `windows-latest` moved to Visual Studio 2026, which CUDA 12.8 does not support.
+          - { target: win32-x64-msvc, os: windows-2022, flags: '--cpu --portable' }
           # CUDA 12.8 here; the local tests used CUDA 13.4, so this is built for the first time in CI.
           - {
               target: win32-x64-msvc-cuda,
-              os: windows-latest,
+              os: windows-2022,
               flags: '--cuda --portable',
               cuda: true,
               experimental: true,
@@ -93,12 +95,17 @@ jobs:
       - if: matrix.cuda
         shell: pwsh
         run: |
-          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
-          $dest = Join-Path $vs 'MSBuild\Microsoft\VC\v170\BuildCustomizations'
           $src = Join-Path $env:CUDA_PATH 'extras\visual_studio_integration\MSBuildExtensions'
-          New-Item -ItemType Directory -Force $dest | Out-Null
-          Copy-Item "$src\*" $dest -Force
-          Get-ChildItem $dest -Filter 'CUDA*' | Select-Object -ExpandProperty Name
+          $instances = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -all -products * -property installationPath
+          foreach ($vs in $instances) {
+            # v170 = Visual Studio 2022, v180 = Visual Studio 2026: fill whichever this instance has.
+            foreach ($vc in Get-ChildItem (Join-Path $vs 'MSBuild\Microsoft\VC') -Directory -Filter 'v1?0' -ErrorAction SilentlyContinue) {
+              $dest = Join-Path $vc.FullName 'BuildCustomizations'
+              New-Item -ItemType Directory -Force $dest | Out-Null
+              Copy-Item "$src\*" $dest -Force
+              "$dest -> " + ((Get-ChildItem $dest -Filter 'CUDA*' | Select-Object -ExpandProperty Name) -join ', ')
+            }
+          }
       - run: npm ci
       - run: npm run build -- ${{ matrix.flags }}
       - name: Load the binary (CPU builds can run on the runner)
@@ -144,7 +151,9 @@ jobs:
         run: for dir in dist/npm/*/; do node scripts/check-pack.js "$dir"; done
       - run: npm install -g npm@latest # `npm stage` needs npm >= 11.15 (Node 22 ships an older one)
       - name: Rehearse staging (changes nothing on npm)
-        run: for dir in dist/npm/*/; do npm stage publish "$dir" --dry-run --access public; done
+        env:
+          NPM_TAG: ${{ needs.verify.outputs.npm-tag }} # npm refuses a prerelease without --tag
+        run: for dir in dist/npm/*/; do npm stage publish "$dir" --dry-run --access public --tag "$NPM_TAG"; done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staged-packages
