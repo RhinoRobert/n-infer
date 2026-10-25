@@ -133,6 +133,7 @@ async function chat(request, response) {
     'content-type': 'text/event-stream',
     'cache-control': 'no-store',
     connection: 'keep-alive',
+    'x-content-type-options': 'nosniff',
   });
   const send = (event) => response.write(`data: ${JSON.stringify(event)}\n\n`);
 
@@ -201,12 +202,21 @@ const server = createServer(async (request, response) => {
 function isLocalRequest(request) {
   const allowed = [`127.0.0.1:${port}`, `localhost:${port}`];
   if (!allowed.includes(request.headers.host ?? '')) return false;
+
+  // Fetch Metadata CSRF protection
+  const site = request.headers['sec-fetch-site'];
+  if (site && site !== 'same-origin' && site !== 'none') return false;
+
   const origin = request.headers.origin;
   return request.method === 'GET' || !origin || allowed.some((host) => origin === `http://${host}`);
 }
 
 function json(response, status, payload) {
-  response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+  response.writeHead(status, {
+    'content-type': 'application/json',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+  });
   response.end(JSON.stringify(payload));
 }
 
