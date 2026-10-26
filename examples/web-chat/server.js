@@ -206,7 +206,11 @@ function isLocalRequest(request) {
 }
 
 function json(response, status, payload) {
-  response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+  response.writeHead(status, {
+    'content-type': 'application/json',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+  });
   response.end(JSON.stringify(payload));
 }
 
