@@ -133,6 +133,7 @@ async function chat(request, response) {
     'content-type': 'text/event-stream',
     'cache-control': 'no-store',
     connection: 'keep-alive',
+    'x-content-type-options': 'nosniff',
   });
   const send = (event) => response.write(`data: ${JSON.stringify(event)}\n\n`);
 
@@ -206,11 +207,20 @@ function isLocalRequest(request) {
 }
 
 function json(response, status, payload) {
-  response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+  response.writeHead(status, {
+    'content-type': 'application/json',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+  });
   response.end(JSON.stringify(payload));
 }
 
 async function readJson(request) {
+  const contentType = request.headers['content-type'] || '';
+  if (!contentType.includes('application/json')) {
+    throw httpError(415, 'content-type must be application/json');
+  }
+
   const chunks = [];
   let size = 0;
   for await (const chunk of request) {
