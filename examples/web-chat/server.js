@@ -170,6 +170,9 @@ async function chat(request, response) {
 }
 
 const server = createServer(async (request, response) => {
+  response.setHeader('X-Content-Type-Options', 'nosniff');
+  response.setHeader('X-Frame-Options', 'DENY');
+
   try {
     if (!isLocalRequest(request)) return json(response, 403, { error: 'forbidden' });
     const url = new URL(request.url, 'http://localhost').pathname;
@@ -179,7 +182,6 @@ const server = createServer(async (request, response) => {
         'content-type': files[url].type,
         'content-security-policy':
           "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'",
-        'x-content-type-options': 'nosniff',
       });
       return response.end(files[url].body);
     }
