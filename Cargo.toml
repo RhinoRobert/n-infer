@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "n-infer"
 version = "0.1.0-beta.0"
 edition = "2021"
@@ -13,7 +13,7 @@ publish = false # shipped to npm, not crates.io
 crate-type = ["cdylib"]
 
 [dependencies]
-napi = { version = "2", default-features = false, features = ["napi6", "async"] }
+napi = { version = "3", default-features = false, features = ["napi6", "async"] }
 napi-derive = "2"
 # `common` exposes llama.cpp's memory fitter, used to pick GPU layers for the free VRAM.
 llama-cpp-2 = { version = "=0.1.160", features = ["common"] }
